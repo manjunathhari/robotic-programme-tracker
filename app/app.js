@@ -155,12 +155,16 @@ function renderDashboard() {
   const giR = fyRecs.filter((r) => r.hosp != null && M.gi(r) != null);
   const giT = agg(giR, M.gi), hT = agg(giR, M.hosp);
   const cx = complexity(fyRecs);
+  const T = trajectory("Hospital", M.hosp);
   const tile = (lab, val, ctx) => `<div class="kpi"><div class="lab">${lab}</div><div class="val">${val}</div><div class="ctx">${ctx}</div></div>`;
   kpis.innerHTML = [
     tile(`${fyLabel(fs)} to date`, fmt(fytd), `${n} month${n > 1 ? "s" : ""} · through ${mLong(lastK)}`),
     tile("Growth vs same months last FY", `<span class="${cls(lfl?.g)}">${sgn(lfl?.g)}</span>`, lfl ? `${fmt(lfl.cur)} vs ${fmt(lfl.prev)} (like-for-like)` : "no prior-year data"),
     tile("Rolling 12 months", fmt(r12), r12p ? `<span class="${cls(r12 / r12p - 1)}">${sgn(r12 / r12p - 1)}</span> vs previous 12` : "–"),
-    tile(`${fyLabel(fs)} run-rate projection`, fmt(fytd / n * 12), "FYTD ÷ months × 12"),
+    ...(T ? [
+      tile(`${fyLabel(fs)} projected total`, fmt(T.projTotal), `${T.projGrowth != null ? `<span class="${cls(T.projGrowth)}">${sgn(T.projGrowth)}</span> vs ${fyLabel(fs - 1)} (${fmt(T.lastFY)}) · ` : ""}at this year's pace`),
+      tile(`Expected total (last year's ${sgn(T.gE)})`, fmt(T.expTotal), `To date ${fmt(T.actFYTD)} vs ${fmt(T.expToDate)} expected · <span class="${cls(T.gap)}">${sgn(T.gap)}</span>`),
+    ] : []),
     tile("Gastro share (FYTD)", pct(hT ? giT / hT : null), `${fmt(giT)} of ${fmt(hT)} hospital cases`),
     tile("Gastro complexity index (FYTD)", fmt(cx.ci, 2), `R2+R3 = ${pct(cx.hi)} · ${fmt(cx.r1)}/${fmt(cx.r2)}/${fmt(cx.r3)}`),
   ].join("");
@@ -172,7 +176,9 @@ function renderDashboard() {
 
   const fys = [...new Set(rangeKeys().map((k) => { const t = ym(k); return fyOf(t.y, t.m); }))].slice(-5);
   chart("c-overlay", { type: "line", data: { labels: FY_MONTHS.map((mm) => MON[mm - 1]),
-    datasets: fys.map((f, i) => lineDs(fyLabel(f), FY_MONTHS.map((mm) => S.recs.get(key(mm >= 4 ? f : f + 1, mm))?.hosp ?? null), css(`--y${i + 1}`))) } });
+    datasets: [...fys.map((f, i) => lineDs(fyLabel(f), FY_MONTHS.map((mm) => S.recs.get(key(mm >= 4 ? f : f + 1, mm))?.hosp ?? null), css(`--y${i + 1}`))),
+      ...(T && fys.includes(T.fs) ? trajDatasets(T, css(`--y${fys.indexOf(T.fs) + 1}`), false).slice(1).map((d) => ({ ...d, label: d.label.replace("Projected", `${fyLabel(T.fs)} projected`) })) : [])] },
+    options: { plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw == null ? "–" : fmt(c.raw, Number.isInteger(c.raw) ? 0 : 1)}` } } } } });
 
   // pending entries
   const pend = [];
@@ -313,12 +319,103 @@ function renderComplexity() {
     `<tr${n === "All gastro" ? ' class="sub"' : ""}><td>${esc(n)}</td><td>${fmt(c.r1)}</td><td>${fmt(c.r2)}</td><td>${fmt(c.r3)}</td><td>${fmt(c.n)}</td><td>${pct(c.n ? c.r1 / c.n : null)}</td><td>${pct(c.n ? c.r2 / c.n : null)}</td><td>${pct(c.n ? c.r3 / c.n : null)}</td><td>${pct(c.hi)}</td><td>${fmt(c.ci, 2)}${c.ci && c.ci === best && rows.length > 1 ? " ▲" : ""}</td></tr>`).join("")}</table>`;
 }
 
+/* ---------------- TRAJECTORY: projected (this year's pace) vs expected (last year's growth) ---------------- */
+const fyKeys = (fs) => FY_MONTHS.map((mm) => key(mm >= 4 ? fs : fs + 1, mm));
+const valAt = (fn, k) => { const r = S.recs.get(k); return r ? fn(r) : null; };
+function curFY() {
+  const withH = S.keys.filter((k) => S.recs.get(k)?.hosp != null); if (!withH.length) return null;
+  const lastK = withH[withH.length - 1]; const t = ym(lastK); return { fs: fyOf(t.y, t.m), lastK };
+}
+// Like-for-like growth of FY fs over FY fs-1 (only months with data in both, optionally up to a month)
+function fyGrowth(fn, fs, upto = null) {
+  let a = 0, b = 0, n = 0;
+  for (const k of fyKeys(fs)) { if (upto && k > upto) break; const v = valAt(fn, k), p = valAt(fn, addM(k, -12)); if (v == null || p == null) continue; a += v; b += p; n++; }
+  return n && b ? { g: a / b - 1, n, a, b } : null;
+}
+/* Projected = last year's same month × this year's growth so far (current trajectory).
+   Expected  = last year's same month × the growth achieved last year (previous trajectory).
+   A series without its own prior-year data (gastro and surgeons until Apr 2027) follows its parent
+   (hospital → gastro → surgeon) at its current share. */
+function trajectory(name, fn, parent) {
+  const c = curFY(); if (!c) return null; const { fs, lastK } = c; const ks = fyKeys(fs);
+  const actual = ks.map((k) => (k <= lastK ? valAt(fn, k) : null));
+  const gC = fyGrowth(fn, fs, lastK), gH = fyGrowth(fn, fs - 1);
+  let proj, exp, basis, gP, gE, own = false;
+  if (gC && gH) {
+    own = true; gP = gC.g; gE = gH.g;
+    const base = ks.map((k) => valAt(fn, addM(k, -12)));
+    proj = ks.map((k, i) => (k > lastK && base[i] != null ? base[i] * (1 + gP) : null));
+    exp = ks.map((k, i) => (base[i] != null ? base[i] * (1 + gE) : null));
+    basis = `Own history: projected at this year's ${sgn(gP)}, expected at last year's ${sgn(gE)}`;
+  } else if (parent) {
+    let a = 0, b = 0;
+    ks.forEach((k, i) => { if (k > lastK) return; const v = actual[i], pv = parent.actual[i]; if (v != null && pv != null) { a += v; b += pv; } });
+    if (!b) return null; const share = a / b;
+    proj = parent.proj.map((v) => (v == null ? null : v * share));
+    exp = parent.exp.map((v) => (v == null ? null : v * share));
+    gP = parent.gP; gE = parent.gE;
+    basis = `${pct(share)} of ${parent.name} (no prior-year data of its own yet)`;
+  } else return null;
+  const actFYTD = sumN(actual) ?? 0;
+  const projTotal = actFYTD + (sumN(proj) ?? 0);
+  const expTotal = sumN(exp);
+  const expToDate = sumN(ks.map((k, i) => (k <= lastK && actual[i] != null ? exp[i] : null)));
+  const lastFY = own ? sumN(fyKeys(fs - 1).map((k) => valAt(fn, k))) : null;
+  return { name, fs, lastK, ks, actual, proj, exp, basis, gP, gE, own, actFYTD, projTotal, expTotal, expToDate,
+    gap: own && expToDate ? actFYTD / expToDate - 1 : null, lastFY, momentum: (() => {
+      const got = ks.map((k, i) => [k, actual[i]]).filter(([k, v]) => k <= lastK && v != null);
+      const l3 = got.slice(-3), p3 = got.slice(-6, -3);
+      if (p3.length < 3) return null; const a = l3.reduce((x, [, v]) => x + v, 0), b = p3.reduce((x, [, v]) => x + v, 0);
+      return b ? { g: a / b - 1, a, b, from: l3[0][0], to: l3[2][0] } : null; })(), projGrowth: lastFY ? projTotal / lastFY - 1 : null,
+    expGrowth: lastFY && expTotal ? expTotal / lastFY - 1 : null,
+    nextProj: projTotal * (1 + gP), nextExp: expTotal != null ? expTotal * (1 + gE) : null };
+}
+function allTrajectories() {
+  const h = trajectory("Hospital — all robotic", M.hosp); if (!h) return [];
+  const g = trajectory("Gastro", M.gi, h);
+  const out = [h]; if (g) out.push(g);
+  for (const s of giSurgeons()) { const t = trajectory(s.name, M.surgeon(s.id), g); if (t) out.push(t); }
+  return out;
+}
+const r1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
+// Datasets for one trajectory: actual, projected (dashed, joined to the last actual point), expected (dotted grey)
+function trajDatasets(t, color, cumulative) {
+  const last = t.ks.indexOf(t.lastK);
+  let act = t.actual.slice(), proj = t.proj.map((v, i) => (i === last ? act[i] : v)), exp = t.exp.slice();
+  if (cumulative) {
+    const cum = (arr, start = 0) => { let c = start; return arr.map((v) => (v == null ? null : (c += v))); };
+    act = cum(act); const actEnd = act[last];
+    proj = t.proj.map((v, i) => (i < last ? null : i === last ? actEnd : v)); let c = actEnd; proj = proj.map((v, i) => (i <= last ? v : v == null ? null : (c += v)));
+    exp = cum(exp);
+  }
+  return [
+    { ...lineDs(`${fyLabel(t.fs)} actual`, act.map(r1), color), spanGaps: false },
+    { ...lineDs(`Projected (this year's ${sgn(t.gP)})`, proj.map(r1), color), borderDash: [7, 5], pointRadius: 0, pointHoverRadius: 4 },
+    { ...lineDs(`Expected (last year's ${sgn(t.gE)})`, exp.map(r1), css("--ink-2")), borderDash: [2, 4], pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
+  ];
+}
+function renderTrajectory() {
+  const ts = allTrajectories(); const sel = $("tr-series");
+  if (!ts.length) { $("t-traj").innerHTML = '<span class="muted">Not enough data yet.</span>'; return; }
+  if (sel.options.length !== ts.length) { const v = sel.value; sel.innerHTML = ts.map((t, i) => `<option value="${i}">${esc(t.name)}</option>`).join(""); if (v) sel.value = v; }
+  const t = ts[+sel.value || 0]; const cumulative = $("tr-view").value === "cum";
+  $("tr-title").textContent = `${fyLabel(t.fs)} trajectory — actual vs projected vs expected`;
+  const ds = trajDatasets(t, css("--s1"), cumulative);
+  if (!cumulative) ds[0] = { ...barDs(ds[0].label, ds[0].data, css("--s1")), type: "bar", order: 2 };
+  chart("c-traj", { type: "line", data: { labels: FY_MONTHS.map((mm) => MON[mm - 1]), datasets: ds },
+    options: { plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw == null ? "–" : fmt(c.raw, c.datasetIndex ? 1 : 0)}` } } } } });
+  const nf = t.fs + 1;
+  $("t-traj").innerHTML = `<table><tr><th>Series</th><th>Actual to ${mLabel(t.lastK)}</th><th>Expected to date</th><th>Actual vs expected</th><th>Last 3 vs prior 3 months</th><th>Projected ${fyLabel(t.fs)}</th><th>Expected ${fyLabel(t.fs)}</th><th>Projected vs ${fyLabel(t.fs - 1)}</th><th>Projected ${fyLabel(nf)}</th><th>Expected ${fyLabel(nf)}</th><th style="text-align:left">Basis</th></tr>${ts.map((x, i) =>
+    `<tr${i === (+sel.value || 0) ? ' class="sub"' : ""}><td>${esc(x.name)}</td><td>${fmt(x.actFYTD)}</td><td>${x.own ? fmt(x.expToDate) : "–"}</td><td class="${cls(x.gap)}">${sgn(x.gap)}</td><td class="${cls(x.momentum?.g)}">${x.momentum ? `${sgn(x.momentum.g)} <span class="muted small">(${x.momentum.a} vs ${x.momentum.b})</span>` : "–"}</td><td>${fmt(x.projTotal)}</td><td>${fmt(x.expTotal)}</td><td class="${cls(x.projGrowth)}">${sgn(x.projGrowth)}</td><td>${fmt(x.nextProj)}</td><td>${fmt(x.nextExp)}</td><td class="muted small" style="text-align:left;white-space:normal;min-width:220px">${esc(x.basis)}</td></tr>`).join("")}</table>`;
+}
+
 /* ---------------- GROWTH ---------------- */
 function seriesList() {
   return [["hosp", "Hospital — all robotic", M.hosp], ["gi", "Gastro", M.gi],
     ...giSurgeons().map((s) => [`s${s.id}`, s.name, M.surgeon(s.id)]), ...PKGS.map((p) => [p, `Gastro ${p}`, M.pkg(p)])];
 }
 function renderGrowth() {
+  renderTrajectory();
   const sel = $("g-series"); const list = seriesList();
   if (sel.options.length !== list.length) { const v = sel.value; sel.innerHTML = list.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join(""); if (v) sel.value = v; }
   const [, name, fn] = list.find(([id]) => id === sel.value) || list[0];
@@ -486,7 +583,7 @@ function init() {
   $("btn-google").onclick = () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: back } });
   $("form-email").onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.auth.signInWithOtp({ email: $("email").value.trim(), options: { emailRedirectTo: back } }); $("login-msg").textContent = error ? error.message : "Check your inbox for the sign-in link."; };
   document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
-  ["f-gran", "f-from", "f-to", "cx-dim", "g-series"].forEach((id) => $(id).onchange = render);
+  ["f-gran", "f-from", "f-to", "cx-dim", "g-series", "tr-series", "tr-view"].forEach((id) => $(id).onchange = render);
   $("lk-q").oninput = renderLookup; $("lk-csv").onclick = downloadCsv;
   $("e-month").onchange = () => $("e-month").value && openMonth(`${$("e-month").value}-01`);
   ["e-hosp"].forEach((id) => $(id).oninput = recalcEntry);

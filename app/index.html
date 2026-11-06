@@ -76,7 +76,7 @@
     <div class="kpis" id="kpis"></div>
     <div class="grid2">
       <div class="card"><h3>Robotic cases — whole hospital</h3><div class="chart"><canvas id="c-total"></canvas></div></div>
-      <div class="card"><h3>Month-by-month, financial years overlaid</h3><div class="chart"><canvas id="c-overlay"></canvas></div></div>
+      <div class="card"><h3>Month-by-month, financial years overlaid <span class="muted small">· dashed = projected, dotted = expected</span></h3><div class="chart"><canvas id="c-overlay"></canvas></div></div>
     </div>
     <div class="card"><h3>Pending data entry</h3><div id="pending"></div></div>
   </section>
@@ -129,6 +129,16 @@
 
   <!-- GROWTH -->
   <section class="tab hidden" id="tab-growth">
+    <div class="card">
+      <h3 id="tr-title">Trajectory</h3>
+      <div class="row gap">
+        <label>Series <select id="tr-series"></select></label>
+        <label>Show <select id="tr-view"><option value="month">Monthly</option><option value="cum">Cumulative (running total)</option></select></label>
+      </div>
+      <div class="chart"><canvas id="c-traj"></canvas></div>
+      <div class="tablewrap" id="t-traj"></div>
+      <p class="muted small"><b>Projected</b> (dashed) = last year's same month × this year's growth so far, i.e. where the current pace lands. <b>Expected</b> (dotted grey) = last year's same month × the growth achieved last year, i.e. what the previous trajectory predicts. "Actual vs expected" is the gap so far (hospital only until other series have their own history). "Last 3 vs prior 3 months" is each series' own momentum this year. Gastro and each surgeon follow their current share of the level above until they have a year of their own history (from April 2027), then switch to their own growth automatically. The time filters above don't apply to this card; it always shows the current financial year.</p>
+    </div>
     <div class="card">
       <div class="row gap">
         <label>Series

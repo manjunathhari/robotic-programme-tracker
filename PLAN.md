@@ -13,16 +13,18 @@ An empty box means "not known yet" and is stored as blank, not zero. Every save 
 ## Reports (all switchable Month / Quarter / Financial year, Apr–Mar)
 | Need | Where in the app |
 |---|---|
-| Total robotic surgeries, progression | Dashboard: bar trend + FY-overlay line + KPI tiles |
+| Total robotic surgeries, progression | Dashboard: bar trend + FY-overlay line with this year's projected (dashed) and expected (dotted) months + KPI tiles incl. projected and expected year totals |
 | Department contribution | Contribution: stacked Gastro Surgery / Other specialties, plus % share table |
 | Individual surgeon contribution | Contribution: stacked by surgeon; % of gastro and % of hospital |
 | Surgeon vs surgeon comparison | **Surgeons** page: a card per surgeon, side-by-side cases, cumulative progression, share of gastro over time, volume × R-mix, head-to-head table (share of each R package, complexity index, best month, momentum, YoY) |
 | Complexity (R1/R2/R3) | Complexity: package mix %, complexity index per surgeon, comparison table (surgeons, FYs, quarters) |
-| Growth | Growth: sequential and like-for-like YoY growth, FY cumulative, for any series |
+| Growth | Growth: **trajectory card** (actual vs projected vs expected, monthly or cumulative) for hospital, gastro and each surgeon, with year-end and next-FY totals; plus history table (sequential and like-for-like YoY growth, FY cumulative) |
 | Look-up | Lookup: filterable table at any granularity, CSV download |
 | Pending entries | Dashboard: chips for months with missing data. Tap one to open that month. |
 
 **Complexity index** = average package level (R1 = 1, R2 = 2, R3 = 3). It puts complexity on one number you can compare across surgeons, quarters and years. R2+R3 % is shown beside it.
+
+**Projected vs expected.** *Projected* = last year's same month × this year's growth so far (where the current pace lands). *Expected* = last year's same month × the growth achieved last year (what the previous trajectory predicts). The gap between them is the progress measure. Gastro and surgeons follow their current share of the level above until they have a year of their own history (from Apr 2027), then switch to their own growth.
 
 **Like-for-like YoY** compares only the months that have data with the same months a year earlier, so a part-year is never compared with a full year.
 
