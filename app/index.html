@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robotic Programme Tracker</title>
+<link rel="stylesheet" href="styles.css">
+<!-- vendored: Chart.js 4.4.1, supabase-js 2.45.4 -->
+<script src="vendor/chart.umd.min.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="title">Robotic Programme Tracker</div>
+    <div class="sub">Manipal Hospital Whitefield · Department of Surgery</div>
+  </div>
+  <div class="who" id="who"></div>
+</header>
+
+<section id="login" class="login hidden">
+  <div class="card narrow">
+    <h2>Sign in</h2>
+    <p class="muted">Access is limited to approved emails. Ask the programme admin to add yours.</p>
+    <button id="btn-google" class="btn primary wide">Continue with Google</button>
+    <div class="or">or get a sign-in link by email</div>
+    <form id="form-email" class="row">
+      <input type="email" id="email" placeholder="you@hospital.org" required>
+      <button class="btn">Send link</button>
+    </form>
+    <p id="login-msg" class="muted small"></p>
+  </div>
+</section>
+
+<section id="denied" class="login hidden">
+  <div class="card narrow">
+    <h2>No access yet</h2>
+    <p>You are signed in as <b id="denied-email"></b>, but this email is not on the access list.</p>
+    <p class="muted">Ask the programme admin to add it (Admin tab).</p>
+    <button class="btn" data-action="signout">Sign out</button>
+  </div>
+</section>
+
+<main id="app" class="hidden">
+  <nav class="tabs" id="tabs">
+    <button data-tab="dashboard" class="active">Dashboard</button>
+    <button data-tab="contribution">Contribution</button>
+    <button data-tab="surgeons">Surgeons</button>
+    <button data-tab="complexity">Complexity</button>
+    <button data-tab="growth">Growth</button>
+    <button data-tab="lookup">Lookup</button>
+    <button data-tab="entry" data-role="editor">Data entry</button>
+    <button data-tab="admin" data-role="admin">Admin</button>
+  </nav>
+
+  <div class="filters" id="filters">
+    <label>View by
+      <select id="f-gran">
+        <option value="month">Month</option>
+        <option value="quarter">Quarter</option>
+        <option value="fy">Financial year</option>
+      </select>
+    </label>
+    <label>From
+      <select id="f-from"></select>
+    </label>
+    <label>To
+      <select id="f-to"></select>
+    </label>
+    <span class="muted small" id="data-status"></span>
+  </div>
+
+  <!-- DASHBOARD -->
+  <section class="tab" id="tab-dashboard">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid2">
+      <div class="card"><h3>Robotic cases — whole hospital</h3><div class="chart"><canvas id="c-total"></canvas></div></div>
+      <div class="card"><h3>Month-by-month, financial years overlaid</h3><div class="chart"><canvas id="c-overlay"></canvas></div></div>
+    </div>
+    <div class="card"><h3>Pending data entry</h3><div id="pending"></div></div>
+  </section>
+
+  <!-- CONTRIBUTION -->
+  <section class="tab hidden" id="tab-contribution">
+    <div class="grid2">
+      <div class="card"><h3>Department contribution to hospital robotic volume</h3><div class="chart"><canvas id="c-dept"></canvas></div>
+        <p class="muted small">"Other specialties" = hospital robotic total minus Gastro Surgery.</p></div>
+      <div class="card"><h3>Gastro surgeons — cases</h3><div class="chart"><canvas id="c-surg"></canvas></div></div>
+    </div>
+    <div class="card"><h3>Share table</h3><div class="tablewrap" id="t-share"></div></div>
+  </section>
+
+  <!-- SURGEONS -->
+  <section class="tab hidden" id="tab-surgeons">
+    <div class="sg-cards" id="sg-cards"></div>
+    <div class="grid2">
+      <div class="card"><h3>Cases per period — side by side</h3><div class="chart"><canvas id="c-sg-cases"></canvas></div></div>
+      <div class="card"><h3>Cumulative cases — progression</h3><div class="chart"><canvas id="c-sg-cum"></canvas></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Share of gastro robotic cases</h3><div class="chart"><canvas id="c-sg-share"></canvas></div></div>
+      <div class="card"><h3>Volume and package mix by surgeon</h3><div class="chart"><canvas id="c-sg-pkg"></canvas></div></div>
+    </div>
+    <div class="card"><h3>Head-to-head comparison <span class="muted small" id="sg-range"></span></h3><div class="tablewrap" id="t-sg"></div>
+      <p class="muted small">All figures cover the From–To range above. "Last 3 vs prior 3 months" compares the three most recent months that have data with the three before them. ▲ marks the highest value in each row.</p></div>
+  </section>
+
+  <!-- COMPLEXITY -->
+  <section class="tab hidden" id="tab-complexity">
+    <div class="grid2">
+      <div class="card"><h3>Package mix (R1 / R2 / R3) — all gastro surgeons</h3><div class="chart"><canvas id="c-mix"></canvas></div></div>
+      <div class="card"><h3>Complexity index by surgeon</h3><div class="chart"><canvas id="c-cx"></canvas></div>
+        <p class="muted small">Complexity index = average package level (R1 = 1, R2 = 2, R3 = 3). 1.00 = all R1; 3.00 = all R3.</p></div>
+    </div>
+    <div class="card"><h3>Complexity comparison</h3>
+      <div class="row gap">
+        <label>Compare
+          <select id="cx-dim">
+            <option value="surgeon">Surgeons (selected range)</option>
+            <option value="fy">Financial years (all gastro)</option>
+            <option value="quarter">Quarters (all gastro)</option>
+          </select>
+        </label>
+      </div>
+      <div class="tablewrap" id="t-cx"></div>
+    </div>
+  </section>
+
+  <!-- GROWTH -->
+  <section class="tab hidden" id="tab-growth">
+    <div class="card">
+      <div class="row gap">
+        <label>Series
+          <select id="g-series"></select>
+        </label>
+      </div>
+      <div class="chart short"><canvas id="c-growth"></canvas></div>
+      <div class="tablewrap" id="t-growth"></div>
+      <p class="muted small">Sequential growth compares with the previous period. YoY compares with the same period one year earlier. Partial periods (months still to be entered) are flagged; FY-to-date growth is like-for-like (same months of the prior FY).</p>
+    </div>
+  </section>
+
+  <!-- LOOKUP -->
+  <section class="tab hidden" id="tab-lookup">
+    <div class="card">
+      <div class="row gap between">
+        <input id="lk-q" placeholder="Filter e.g. FY 2026-27, Q2, Sep" class="grow">
+        <button class="btn" id="lk-csv">Download CSV</button>
+      </div>
+      <div class="tablewrap" id="t-lookup"></div>
+    </div>
+  </section>
+
+  <!-- ENTRY -->
+  <section class="tab hidden" id="tab-entry">
+    <div class="card entry">
+      <div class="row gap between">
+        <h3>Monthly entry</h3>
+        <label>Month <input type="month" id="e-month"></label>
+      </div>
+      <div class="fy-strip">
+        <label>Financial year <select id="e-fy"></select></label>
+        <div id="e-months" class="months"></div>
+        <span class="muted small" id="e-fy-sum"></span>
+      </div>
+      <div class="entry-top">
+        <label class="field">Total robotic surgeries (hospital)
+          <input type="number" min="0" inputmode="numeric" id="e-hosp"></label>
+        <label class="field">Gastro Surgery robotic total
+          <input type="number" min="0" inputmode="numeric" id="e-gi">
+          <span class="muted small" id="e-gi-hint">Auto-fills from the surgeon grid</span></label>
+      </div>
+      <h4>Gastro — by surgeon and package</h4>
+      <div class="tablewrap"><table class="grid-entry" id="e-grid"></table></div>
+      <label class="field">Notes <input id="e-notes" placeholder="optional"></label>
+      <div id="e-warn" class="warn hidden"></div>
+      <div class="row gap">
+        <button class="btn primary" id="e-save">Save month</button>
+        <span id="e-msg" class="small"></span>
+      </div>
+      <p class="muted small">Leave a box empty if the number is not known yet (empty ≠ zero). Saving overwrites that month; every change is kept in the audit log.</p>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <section class="tab hidden" id="tab-admin">
+    <div class="grid2">
+      <div class="card"><h3>Who has access</h3>
+        <div id="acc-list"></div>
+        <form id="acc-form" class="row gap">
+          <input type="email" id="acc-email" placeholder="colleague@email" required class="grow">
+          <select id="acc-role"><option>viewer</option><option>editor</option><option>admin</option></select>
+          <button class="btn">Add</button>
+        </form>
+        <p class="muted small">Viewer = reports only. Editor = can enter data. Admin = can also manage access and surgeons.</p>
+      </div>
+      <div class="card"><h3>Surgeons</h3>
+        <div id="sg-list"></div>
+        <form id="sg-form" class="row gap">
+          <input id="sg-name" placeholder="Dr. Name" required class="grow">
+          <select id="sg-dept"></select>
+          <button class="btn">Add</button>
+        </form>
+      </div>
+    </div>
+    <div class="card"><h3>Recent changes</h3><div class="tablewrap" id="audit"></div></div>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>
