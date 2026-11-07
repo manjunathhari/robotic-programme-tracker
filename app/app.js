@@ -13,7 +13,7 @@ const PKGS = ["R1", "R2", "R3"];
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const FY_MONTHS = [4,5,6,7,8,9,10,11,12,1,2,3];
 
-const S = { user: null, role: null, surgeons: [], depts: [], recs: new Map(), keys: [], charts: {}, tab: "dashboard" };
+const S = { user: null, role: null, surgeons: [], depts: [], recs: new Map(), keys: [], charts: {}, cfgs: {}, tables: {}, tab: "dashboard" };
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, "0");
 const key = (y, m) => `${y}-${pad(m)}-01`;
@@ -137,6 +137,7 @@ function chart(id, cfg) {
       y: { beginAtZero: true, grid: { color: grid }, border: { display: false }, ticks: { precision: 0 } } },
   };
   cfg.options = deepMerge(base, cfg.options || {});
+  S.cfgs[id] = cloneCfg(cfg);
   S.charts[id] = new Chart($(id), cfg);
 }
 function deepMerge(a, b) { for (const k in b) { if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) && a[k] && typeof a[k] === "object") deepMerge(a[k], b[k]); else a[k] = b[k]; } return a; }
@@ -156,6 +157,57 @@ const wash = (color) => (ctx) => {
 const barDs = (label, data, color, stack) => ({ label, data, backgroundColor: sheen(color), hoverBackgroundColor: color, borderColor: css("--surface"), borderWidth: stack ? { top: 2 } : 0, borderRadius: stack ? 0 : { topLeft: 6, topRight: 6 }, borderSkipped: "start", maxBarThickness: 46, stack });
 const lineDs = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2.25, pointRadius: 3, pointHoverRadius: 6,
   pointBorderColor: css("--surface"), pointBorderWidth: 1.5, pointHoverBorderWidth: 2, cubicInterpolationMode: "monotone", tension: 0.3, spanGaps: false });
+
+
+/* ---------------- EXPANDED CHART (pop-out with numbers) ---------------- */
+// Deep-copies plain objects/arrays but keeps functions (scriptable colours, callbacks) as-is.
+function cloneCfg(v) {
+  if (Array.isArray(v)) return v.map(cloneCfg);
+  if (v && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype) { const o = {}; for (const k in v) o[k] = cloneCfg(v[k]); return o; }
+  return v;
+}
+// Draws each value on its bar / point. Skips hidden series and duplicate labels at the same spot.
+const valueLabels = {
+  id: "valueLabels",
+  afterDatasetsDraw(chart, _a, opts) {
+    if (!opts || !opts.on) return;
+    const { ctx } = chart; const seen = new Set();
+    ctx.save(); ctx.font = `600 ${opts.size || 11}px ${Chart.defaults.font.family}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.lineWidth = 3; ctx.strokeStyle = css("--surface"); ctx.fillStyle = css("--ink");
+    chart.data.datasets.forEach((ds, i) => {
+      if (!chart.isDatasetVisible(i)) return;
+      chart.getDatasetMeta(i).data.forEach((el, j) => {
+        const v = ds.data[j]; if (v == null || el.skip) return;
+        const { x, y } = el.getProps(["x", "y"], true); const k = `${Math.round(x)}:${Math.round(y)}`; if (seen.has(k)) return; seen.add(k);
+        const t = fmt(v, opts.decimals || 0); ctx.strokeText(t, x, y - 6); ctx.fillText(t, x, y - 6);
+      });
+    });
+    ctx.restore();
+  },
+};
+let modalChart = null;
+function openChartModal(id, title) {
+  const base = S.cfgs[id]; if (!base) return;
+  const cfg = cloneCfg(base);
+  cfg.plugins = [valueLabels];
+  cfg.options = deepMerge(cfg.options || {}, {
+    layout: { padding: { top: 22, right: 8 } },
+    plugins: { valueLabels: { on: true, size: 11 }, legend: { position: "bottom", labels: { font: { size: 13 } } } },
+    scales: { x: { ticks: { autoSkip: false, maxRotation: 50, minRotation: 0, font: { size: 12 } } }, y: { grace: "8%", ticks: { font: { size: 12 } } } },
+  });
+  for (const d of cfg.data.datasets) if (d.maxBarThickness) d.maxBarThickness = 60;
+  $("m-title").textContent = title;
+  $("m-hint").textContent = cfg.data.datasets.length > 1 ? "Tap a legend item to hide or show that series." : "";
+  $("m-table").innerHTML = S.tables[id] ? S.tables[id]() : "";
+  $("modal").classList.remove("hidden"); document.body.style.overflow = "hidden";
+  if (modalChart) modalChart.destroy();
+  modalChart = new Chart($("c-modal"), cfg);
+  $("m-close").focus();
+}
+function closeChartModal() {
+  $("modal").classList.add("hidden"); document.body.style.overflow = "";
+  if (modalChart) { modalChart.destroy(); modalChart = null; }
+}
 
 /* ---------------- DASHBOARD ---------------- */
 function renderDashboard() {
@@ -189,7 +241,30 @@ function renderDashboard() {
     datasets: [barDs("Robotic cases", ps.map((p) => agg(p.recs, M.hosp)), css("--data-1"))] },
     options: { plugins: { legend: { display: false } } } });
 
+  S.tables["c-total"] = () => {
+    let prev = null;
+    const rows = ps.map((p) => {
+      const v = agg(p.recs, M.hosp); const part = v != null && isPartial(p, M.hosp);
+      const seq = prev != null && v != null && prev ? v / prev - 1 : null; if (v != null) prev = v;
+      const y = v != null ? yoy(p, M.hosp) : null;
+      return `<tr><td>${p.label}${part ? ' <span class="muted small">partial</span>' : ""}</td><td>${v == null ? '<span class="muted">not recorded</span>' : fmt(v)}</td><td class="${cls(seq)}">${sgn(seq)}</td><td>${y ? fmt(y.prev) : "–"}</td><td class="${cls(y?.g)}">${sgn(y?.g)}</td></tr>`;
+    });
+    const tot = agg(ps.flatMap((p) => p.recs), M.hosp);
+    return `<table><tr><th>Period</th><th>Robotic cases</th><th>vs previous period</th><th>Same period last year</th><th>YoY growth</th></tr>${rows.join("")}<tr class="sub"><td>Total (selected range)</td><td>${fmt(tot)}</td><td></td><td></td><td></td></tr></table>`;
+  };
   const fys = [...new Set(rangeKeys().map((k) => { const t = ym(k); return fyOf(t.y, t.m); }))].slice(-5);
+  S.tables["c-overlay"] = () => {
+    const cell = (v, cls_ = "") => `<td class="${cls_}">${v == null ? "–" : fmt(v)}</td>`;
+    const head = `<tr><th>Financial year</th>${FY_MONTHS.map((mm) => `<th>${MON[mm - 1]}</th>`).join("")}<th>Total</th></tr>`;
+    const rows = fys.map((f) => { const vals = FY_MONTHS.map((mm) => S.recs.get(key(mm >= 4 ? f : f + 1, mm))?.hosp ?? null);
+      return `<tr><td>${fyLabel(f)}</td>${vals.map((v) => cell(v)).join("")}<td><b>${fmt(sumN(vals))}</b></td></tr>`; });
+    if (T && fys.includes(T.fs)) {
+      rows.push(`<tr><td>${fyLabel(T.fs)} projected <span class="muted small">(this year's ${sgn(T.gP)})</span></td>${T.actual.map((v, i) => (T.ks[i] <= T.lastK ? cell(v, "na") : cell(r1(T.proj[i])))).join("")}<td><b>${fmt(T.projTotal)}</b></td></tr>`);
+      rows.push(`<tr><td>Expected <span class="muted small">(last year's ${sgn(T.gE)})</span></td>${T.exp.map((v) => cell(r1(v))).join("")}<td><b>${fmt(T.expTotal)}</b></td></tr>`);
+      rows.push(`<tr class="sub"><td>${fyLabel(T.fs)} actual vs expected</td>${T.actual.map((v, i) => { const e = T.exp[i]; const g = v != null && e ? v / e - 1 : null; return `<td class="${cls(g)}">${sgn(g)}</td>`; }).join("")}<td class="${cls(T.gap)}">${sgn(T.gap)}</td></tr>`);
+    }
+    return `<table>${head}${rows.join("")}</table><p class="muted small">Grey figures in the projected row are actual months; the projection starts after ${mLong(T ? T.lastK : S.keys[S.keys.length - 1])}. Projected and expected values are rounded; totals use unrounded figures.</p>`;
+  };
   chart("c-overlay", { type: "line", data: { labels: FY_MONTHS.map((mm) => MON[mm - 1]),
     datasets: [...fys.map((f, i) => lineDs(fyLabel(f), FY_MONTHS.map((mm) => S.recs.get(key(mm >= 4 ? f : f + 1, mm))?.hosp ?? null), fyColor(i, fys.length))),
       ...(T && fys.includes(T.fs) ? trajDatasets(T, fyColor(fys.indexOf(T.fs), fys.length), false).slice(1).map((d) => ({ ...d, label: d.label.replace("Projected", `${fyLabel(T.fs)} projected`) })) : [])] },
@@ -604,6 +679,14 @@ function init() {
   ["e-hosp"].forEach((id) => $(id).oninput = recalcEntry);
   $("e-gi").oninput = () => { giTouched = $("e-gi").value !== ""; recalcEntry(); };
   $("e-save").onclick = saveMonth;
+  document.querySelectorAll("[data-expand]").forEach((card) => {
+    const open = () => openChartModal(card.dataset.expand, card.querySelector("h3").childNodes[0].textContent.trim());
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+  });
+  $("m-close").onclick = closeChartModal;
+  $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeChartModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("modal").classList.contains("hidden")) closeChartModal(); });
   $("e-fy").onchange = () => { const f = +$("e-fy").value; const now = thisMonth();
     const ks = FY_MONTHS.map((mm) => key(mm >= 4 ? f : f + 1, mm)).filter((k) => k <= now);
     openMonth(ks.find((k) => monthStatus(k) !== "done") || ks[ks.length - 1] || key(f, 4)); };

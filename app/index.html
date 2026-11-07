@@ -78,8 +78,8 @@
   <section class="tab" id="tab-dashboard">
     <div class="kpis" id="kpis"></div>
     <div class="grid2">
-      <div class="card"><h3>Robotic cases — whole hospital</h3><div class="chart"><canvas id="c-total"></canvas></div></div>
-      <div class="card"><h3>Month-by-month, financial years overlaid <span class="muted small">· dashed = projected, dotted = expected</span></h3><div class="chart"><canvas id="c-overlay"></canvas></div></div>
+      <div class="card expandable" data-expand="c-total" tabindex="0" role="button" aria-label="Expand chart: robotic cases, whole hospital"><h3>Robotic cases — whole hospital <span class="expand-hint">⤢ Expand</span></h3><div class="chart"><canvas id="c-total"></canvas></div></div>
+      <div class="card expandable" data-expand="c-overlay" tabindex="0" role="button" aria-label="Expand chart: financial years overlaid"><h3>Month-by-month, financial years overlaid <span class="expand-hint">⤢ Expand</span><span class="muted small sub-note">dashed = projected, dotted = expected</span></h3><div class="chart"><canvas id="c-overlay"></canvas></div></div>
     </div>
     <div class="card"><h3>Pending data entry</h3><div id="pending"></div></div>
   </section>
@@ -221,6 +221,16 @@
   </section>
 </main>
 
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="m-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div><h2 id="m-title"></h2><div class="muted small" id="m-hint"></div></div>
+      <button class="btn" id="m-close" aria-label="Close">✕ Close</button>
+    </div>
+    <div class="chart big"><canvas id="c-modal"></canvas></div>
+    <div class="tablewrap" id="m-table"></div>
+  </div>
+</div>
 <div id="toast" class="toast hidden"></div>
 <script src="app.js"></script>
 </body>
