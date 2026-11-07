@@ -21,12 +21,12 @@
   --bad: #e7000b;
   --shadow: 0 0 0 1px rgba(23,23,23,0.05), 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
   /* data */
-  --data-1: #171717;                                   /* single-series marks */
-  --expect: #2a78d6;                                   /* 'expected' benchmark line */
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #e87ba4; --s5: #008300;   /* surgeons (identity) */
-  --d-gi: #171717; --d-other: #d4d4d4;                 /* departments */
-  --r1: #d4d4d4; --r2: #737373; --r3: #171717;         /* R1→R3, ordinal grey ramp */
-  --yr1: #e5e5e5; --yr2: #d4d4d4; --yr3: #a3a3a3; --yr4: #737373;  /* older FYs, oldest lightest */
+  /* chart colours (unchanged from the original palette) */
+  --data-1: #2a78d6; --expect: #52514e;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #e87ba4; --s5: #008300;
+  --d-gi: #6250d6; --d-other: #c3c2b7;
+  --r1: #86b6ef; --r2: #2a78d6; --r3: #104281;
+  --y1: #2a78d6; --y2: #eb6834; --y3: #1baf7a; --y4: #6250d6; --y5: #e34948;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
@@ -36,11 +36,11 @@
     --border: #262626; --grid: #222222; --axis: #404040; --accent: #fafafa;
     --ember: #ff4d55; --good: #4ade80; --bad: #ff4d55;
     --shadow: 0 0 0 1px rgba(255,255,255,0.04);
-    --data-1: #fafafa; --expect: #5598e7;
+    --data-1: #3987e5; --expect: #c3c2b7;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #d55181; --s5: #008300;
-    --d-gi: #fafafa; --d-other: #404040;
-    --r1: #404040; --r2: #a3a3a3; --r3: #fafafa;
-    --yr1: #262626; --yr2: #404040; --yr3: #525252; --yr4: #737373;
+    --d-gi: #9085e9; --d-other: #52514e;
+    --r1: #86b6ef; --r2: #3987e5; --r3: #184f95;
+    --y1: #3987e5; --y2: #d95926; --y3: #199e70; --y4: #9085e9; --y5: #e66767;
   }
 }
 :root[data-theme="dark"] {
@@ -50,11 +50,11 @@
   --border: #262626; --grid: #222222; --axis: #404040; --accent: #fafafa;
   --ember: #ff4d55; --good: #4ade80; --bad: #ff4d55;
   --shadow: 0 0 0 1px rgba(255,255,255,0.04);
-  --data-1: #fafafa; --expect: #5598e7;
+  --data-1: #3987e5; --expect: #c3c2b7;
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #d55181; --s5: #008300;
-  --d-gi: #fafafa; --d-other: #404040;
-  --r1: #404040; --r2: #a3a3a3; --r3: #fafafa;
-  --yr1: #262626; --yr2: #404040; --yr3: #525252; --yr4: #737373;
+  --d-gi: #9085e9; --d-other: #52514e;
+  --r1: #86b6ef; --r2: #3987e5; --r3: #184f95;
+  --y1: #3987e5; --y2: #d95926; --y3: #199e70; --y4: #9085e9; --y5: #e66767;
 }
 
 * { box-sizing: border-box; }

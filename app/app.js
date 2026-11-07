@@ -120,7 +120,7 @@ const gran = () => $("f-gran").value;
 const giSurgeons = () => S.surgeons.filter((s) => s.department_code === "GI");
 const SCOL = (i) => css(`--s${(i % 5) + 1}`);
 // FY overlay: current (last) year in ink, older years in a grey ramp, oldest lightest
-const fyColor = (i, n) => (i === n - 1 ? css("--data-1") : css(`--yr${4 - (n - 1) + i + 1}`));
+const fyColor = (i) => css(`--y${(i % 5) + 1}`);
 
 /* ---------------- charts ---------------- */
 function chart(id, cfg) {
