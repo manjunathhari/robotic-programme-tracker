@@ -119,12 +119,14 @@ function rangeKeys() {
 const gran = () => $("f-gran").value;
 const giSurgeons = () => S.surgeons.filter((s) => s.department_code === "GI");
 const SCOL = (i) => css(`--s${(i % 5) + 1}`);
+// FY overlay: current (last) year in ink, older years in a grey ramp, oldest lightest
+const fyColor = (i, n) => (i === n - 1 ? css("--data-1") : css(`--yr${4 - (n - 1) + i + 1}`));
 
 /* ---------------- charts ---------------- */
 function chart(id, cfg) {
   if (S.charts[id]) S.charts[id].destroy();
   const ink2 = css("--ink-2"), grid = css("--grid");
-  Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  Chart.defaults.font.family = 'Geist, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
   Chart.defaults.color = ink2;
   const base = {
     responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, transitions: { resize: { animation: { duration: 0 } } },
@@ -158,8 +160,7 @@ function renderDashboard() {
   const T = trajectory("Hospital", M.hosp);
   const tile = (lab, val, ctx) => `<div class="kpi"><div class="lab">${lab}</div><div class="val">${val}</div><div class="ctx">${ctx}</div></div>`;
   kpis.innerHTML = [
-    tile(`${fyLabel(fs)} to date`, fmt(fytd), `${n} month${n > 1 ? "s" : ""} · through ${mLong(lastK)}`),
-    tile("Growth vs same months last FY", `<span class="${cls(lfl?.g)}">${sgn(lfl?.g)}</span>`, lfl ? `${fmt(lfl.cur)} vs ${fmt(lfl.prev)} (like-for-like)` : "no prior-year data"),
+    tile(`${fyLabel(fs)} to date`, fmt(fytd), `${lfl ? `<span class="${cls(lfl.g)}">${sgn(lfl.g)}</span> vs same months last FY (${fmt(lfl.prev)}) · ` : ""}through ${mLong(lastK)}`),
     tile("Rolling 12 months", fmt(r12), r12p ? `<span class="${cls(r12 / r12p - 1)}">${sgn(r12 / r12p - 1)}</span> vs previous 12` : "–"),
     ...(T ? [
       tile(`${fyLabel(fs)} projected total`, fmt(T.projTotal), `${T.projGrowth != null ? `<span class="${cls(T.projGrowth)}">${sgn(T.projGrowth)}</span> vs ${fyLabel(fs - 1)} (${fmt(T.lastFY)}) · ` : ""}at this year's pace`),
@@ -171,13 +172,13 @@ function renderDashboard() {
 
   const ps = periods(gran(), rangeKeys());
   chart("c-total", { type: "bar", data: { labels: ps.map((p) => p.label + (isPartial(p, M.hosp) && agg(p.recs, M.hosp) != null ? "*" : "")),
-    datasets: [barDs("Robotic cases", ps.map((p) => agg(p.recs, M.hosp)), css("--s1"))] },
+    datasets: [barDs("Robotic cases", ps.map((p) => agg(p.recs, M.hosp)), css("--data-1"))] },
     options: { plugins: { legend: { display: false } } } });
 
   const fys = [...new Set(rangeKeys().map((k) => { const t = ym(k); return fyOf(t.y, t.m); }))].slice(-5);
   chart("c-overlay", { type: "line", data: { labels: FY_MONTHS.map((mm) => MON[mm - 1]),
-    datasets: [...fys.map((f, i) => lineDs(fyLabel(f), FY_MONTHS.map((mm) => S.recs.get(key(mm >= 4 ? f : f + 1, mm))?.hosp ?? null), css(`--y${i + 1}`))),
-      ...(T && fys.includes(T.fs) ? trajDatasets(T, css(`--y${fys.indexOf(T.fs) + 1}`), false).slice(1).map((d) => ({ ...d, label: d.label.replace("Projected", `${fyLabel(T.fs)} projected`) })) : [])] },
+    datasets: [...fys.map((f, i) => lineDs(fyLabel(f), FY_MONTHS.map((mm) => S.recs.get(key(mm >= 4 ? f : f + 1, mm))?.hosp ?? null), fyColor(i, fys.length))),
+      ...(T && fys.includes(T.fs) ? trajDatasets(T, fyColor(fys.indexOf(T.fs), fys.length), false).slice(1).map((d) => ({ ...d, label: d.label.replace("Projected", `${fyLabel(T.fs)} projected`) })) : [])] },
     options: { plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw == null ? "–" : fmt(c.raw, Number.isInteger(c.raw) ? 0 : 1)}` } } } } });
 
   // pending entries
@@ -391,7 +392,7 @@ function trajDatasets(t, color, cumulative) {
   return [
     { ...lineDs(`${fyLabel(t.fs)} actual`, act.map(r1), color), spanGaps: false },
     { ...lineDs(`Projected (this year's ${sgn(t.gP)})`, proj.map(r1), color), borderDash: [7, 5], pointRadius: 0, pointHoverRadius: 4 },
-    { ...lineDs(`Expected (last year's ${sgn(t.gE)})`, exp.map(r1), css("--ink-2")), borderDash: [2, 4], pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
+    { ...lineDs(`Expected (last year's ${sgn(t.gE)})`, exp.map(r1), css("--expect")), borderDash: [2, 4], pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
   ];
 }
 function renderTrajectory() {
@@ -400,8 +401,8 @@ function renderTrajectory() {
   if (sel.options.length !== ts.length) { const v = sel.value; sel.innerHTML = ts.map((t, i) => `<option value="${i}">${esc(t.name)}</option>`).join(""); if (v) sel.value = v; }
   const t = ts[+sel.value || 0]; const cumulative = $("tr-view").value === "cum";
   $("tr-title").textContent = `${fyLabel(t.fs)} trajectory — actual vs projected vs expected`;
-  const ds = trajDatasets(t, css("--s1"), cumulative);
-  if (!cumulative) ds[0] = { ...barDs(ds[0].label, ds[0].data, css("--s1")), type: "bar", order: 2 };
+  const ds = trajDatasets(t, css("--data-1"), cumulative);
+  if (!cumulative) ds[0] = { ...barDs(ds[0].label, ds[0].data, css("--data-1")), type: "bar", order: 2 };
   chart("c-traj", { type: "line", data: { labels: FY_MONTHS.map((mm) => MON[mm - 1]), datasets: ds },
     options: { plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw == null ? "–" : fmt(c.raw, c.datasetIndex ? 1 : 0)}` } } } } });
   const nf = t.fs + 1;
@@ -428,7 +429,7 @@ function renderGrowth() {
     if (cumKey !== p.fs) { cumKey = p.fs; cumFy = 0; } cumFy += v;
     const row = { p, v, part, seq, seqFlag, y, cumFy }; prev = row; return row;
   });
-  chart("c-growth", { type: "bar", data: { labels: rows.map((r) => r.p.label + (r.part ? "*" : "")), datasets: [barDs(name, rows.map((r) => r.v), css("--s1"))] },
+  chart("c-growth", { type: "bar", data: { labels: rows.map((r) => r.p.label + (r.part ? "*" : "")), datasets: [barDs(name, rows.map((r) => r.v), css("--data-1"))] },
     options: { plugins: { legend: { display: false } } } });
   $("t-growth").innerHTML = `<table><tr><th>Period</th><th>Cases</th><th>vs previous period</th><th>Same period last year (matched months)</th><th>YoY growth</th><th>FY cumulative</th></tr>${rows.map((r) =>
     `<tr><td>${r.p.label}${r.part ? ' <span class="muted small">partial</span>' : ""}</td><td>${fmt(r.v)}</td><td class="${cls(r.seq)}">${sgn(r.seq)}${r.seqFlag && r.seq != null ? " *" : ""}</td><td>${r.y ? fmt(r.y.prev) + (r.y.used < r.p.recs.filter((x) => fn(x) != null).length ? " (part)" : "") : "–"}</td><td class="${cls(r.y?.g)}">${sgn(r.y?.g)}</td><td>${fmt(r.cumFy)}</td></tr>`).join("")}</table>`;
