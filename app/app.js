@@ -132,7 +132,7 @@ function chart(id, cfg) {
     responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, transitions: { resize: { animation: { duration: 0 } } },
     interaction: { mode: "index", intersect: false },
     plugins: { legend: { position: "bottom", labels: { boxWidth: 12, boxHeight: 12, usePointStyle: true, pointStyle: "rectRounded" } },
-      tooltip: { backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink"), borderColor: css("--axis"), borderWidth: 1, padding: 10 } },
+      tooltip: { backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink"), borderColor: css("--border"), borderWidth: 1, padding: 12, cornerRadius: 12, boxPadding: 4, usePointStyle: true, titleFont: { weight: "600" } } },
     scales: { x: { grid: { display: false }, border: { color: css("--axis") }, ticks: { maxRotation: 0, autoSkip: true } },
       y: { beginAtZero: true, grid: { color: grid }, border: { display: false }, ticks: { precision: 0 } } },
   };
@@ -140,8 +140,22 @@ function chart(id, cfg) {
   S.charts[id] = new Chart($(id), cfg);
 }
 function deepMerge(a, b) { for (const k in b) { if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) && a[k] && typeof a[k] === "object") deepMerge(a[k], b[k]); else a[k] = b[k]; } return a; }
-const barDs = (label, data, color, stack) => ({ label, data, backgroundColor: color, borderColor: css("--surface"), borderWidth: stack ? { top: 2 } : 0, borderRadius: stack ? 0 : 4, borderSkipped: "start", maxBarThickness: 46, stack });
-const lineDs = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, cubicInterpolationMode: "monotone", tension: 0.3, spanGaps: false });
+// Bars get a soft sheen: a light catch at the top easing into full colour.
+const sheen = (color) => (ctx) => {
+  const a = ctx.chart.chartArea; if (!a || !/^#([0-9a-f]{6})$/i.test(color)) return color;
+  const g = ctx.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+  const lift = (h, t) => "#" + [1, 3, 5].map((i) => Math.round(parseInt(h.substr(i, 2), 16) + (255 - parseInt(h.substr(i, 2), 16)) * t).toString(16).padStart(2, "0")).join("");
+  g.addColorStop(0, lift(color, 0.22)); g.addColorStop(0.35, color); g.addColorStop(1, color); return g;
+};
+// Lines get a faint colour wash beneath them.
+const wash = (color) => (ctx) => {
+  const a = ctx.chart.chartArea; if (!a || !/^#([0-9a-f]{6})$/i.test(color)) return "transparent";
+  const g = ctx.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+  g.addColorStop(0, color + "22"); g.addColorStop(1, color + "00"); return g;
+};
+const barDs = (label, data, color, stack) => ({ label, data, backgroundColor: sheen(color), hoverBackgroundColor: color, borderColor: css("--surface"), borderWidth: stack ? { top: 2 } : 0, borderRadius: stack ? 0 : { topLeft: 6, topRight: 6 }, borderSkipped: "start", maxBarThickness: 46, stack });
+const lineDs = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2.25, pointRadius: 3, pointHoverRadius: 6,
+  pointBorderColor: css("--surface"), pointBorderWidth: 1.5, pointHoverBorderWidth: 2, cubicInterpolationMode: "monotone", tension: 0.3, spanGaps: false });
 
 /* ---------------- DASHBOARD ---------------- */
 function renderDashboard() {
@@ -390,7 +404,7 @@ function trajDatasets(t, color, cumulative) {
     exp = cum(exp);
   }
   return [
-    { ...lineDs(`${fyLabel(t.fs)} actual`, act.map(r1), color), spanGaps: false },
+    { ...lineDs(`${fyLabel(t.fs)} actual`, act.map(r1), color), spanGaps: false, fill: "origin", backgroundColor: wash(color) },
     { ...lineDs(`Projected (this year's ${sgn(t.gP)})`, proj.map(r1), color), borderDash: [7, 5], pointRadius: 0, pointHoverRadius: 4 },
     { ...lineDs(`Expected (last year's ${sgn(t.gE)})`, exp.map(r1), css("--expect")), borderDash: [2, 4], pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
   ];

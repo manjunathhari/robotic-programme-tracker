@@ -190,3 +190,75 @@ td.best { font-weight: 600; }
 .chip.m-empty { background: var(--input); border-color: transparent; }
 .chip.m-future { opacity: .35; cursor: default; background: transparent; }
 .chip.sel { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* ===================== Polish layer: light, depth and sheen =====================
+   Same colours, layout and font; adds a light source, layered elevation, glass and gloss. */
+:root {
+  --ink-2: #5f5f5f;                                  /* crisper secondary text */
+  --glow: radial-gradient(1200px 520px at 50% -180px, rgba(255,255,255,0.95), rgba(255,255,255,0) 70%);
+  --card-grad: linear-gradient(180deg, #ffffff 0%, #fcfcfc 100%);
+  --shadow: 0 0 0 1px rgba(17,17,17,0.04), 0 1px 1px rgba(17,17,17,0.03), 0 4px 10px -2px rgba(17,17,17,0.06), 0 14px 32px -12px rgba(17,17,17,0.10);
+  --shadow-hover: 0 0 0 1px rgba(17,17,17,0.05), 0 2px 3px rgba(17,17,17,0.04), 0 10px 22px -6px rgba(17,17,17,0.10), 0 24px 48px -18px rgba(17,17,17,0.16);
+  --highlight: inset 0 1px 0 rgba(255,255,255,0.9);
+  --gloss: linear-gradient(180deg, #2b2b2b 0%, #111111 55%, #050505 100%);
+  --gloss-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.18), 0 4px 10px -4px rgba(0,0,0,0.35);
+  --glass: rgba(250,250,250,0.72);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --ink-2: #b5b5b5;
+    --glow: radial-gradient(1200px 520px at 50% -200px, rgba(255,255,255,0.07), rgba(255,255,255,0) 70%);
+    --card-grad: linear-gradient(180deg, #1c1c1c 0%, #161616 100%);
+    --shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 8px 24px -10px rgba(0,0,0,0.7);
+    --shadow-hover: 0 0 0 1px rgba(255,255,255,0.08), 0 16px 36px -14px rgba(0,0,0,0.8);
+    --highlight: inset 0 1px 0 rgba(255,255,255,0.06);
+    --gloss: linear-gradient(180deg, #ffffff 0%, #ececec 100%);
+    --gloss-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.5);
+    --glass: rgba(18,18,18,0.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ink-2: #b5b5b5;
+  --glow: radial-gradient(1200px 520px at 50% -200px, rgba(255,255,255,0.07), rgba(255,255,255,0) 70%);
+  --card-grad: linear-gradient(180deg, #1c1c1c 0%, #161616 100%);
+  --shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 8px 24px -10px rgba(0,0,0,0.7);
+  --shadow-hover: 0 0 0 1px rgba(255,255,255,0.08), 0 16px 36px -14px rgba(0,0,0,0.8);
+  --highlight: inset 0 1px 0 rgba(255,255,255,0.06);
+  --gloss: linear-gradient(180deg, #ffffff 0%, #ececec 100%);
+  --gloss-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.5);
+  --glass: rgba(18,18,18,0.7);
+}
+
+body { background: var(--glow), var(--page); background-attachment: fixed; text-rendering: optimizeLegibility; }
+
+/* frosted-glass header */
+.top { position: sticky; top: 0; z-index: 20; background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(16px); backdrop-filter: saturate(180%) blur(16px);
+  border-bottom: 1px solid rgba(127,127,127,0.14); }
+.title { font-size: 19px; letter-spacing: -0.03em; }
+
+/* elevated surfaces with a top-edge highlight */
+.card, .kpi, .sg-card { background: var(--card-grad); border-color: transparent;
+  box-shadow: var(--highlight), var(--shadow); transition: box-shadow .25s ease, transform .25s ease; }
+.kpi:hover, .sg-card:hover { box-shadow: var(--highlight), var(--shadow-hover); transform: translateY(-2px); }
+.tabs { background: var(--glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-color: transparent; box-shadow: var(--highlight), var(--shadow); }
+
+/* polished-black gloss on primary elements */
+.tabs button { transition: color .15s ease, background .15s ease; }
+.tabs button.active, .btn.primary, .badge, .chip.m-done, .toast {
+  background: var(--gloss); color: var(--surface); border-color: transparent; box-shadow: var(--gloss-shadow); }
+.btn.primary:hover { filter: brightness(1.15); background: var(--gloss); }
+.btn, .chip, select, input { transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, filter .15s ease; }
+.btn:not(.primary) { background: var(--surface); box-shadow: var(--highlight), 0 1px 2px rgba(17,17,17,0.06); }
+
+/* inputs: recessed look, glowing focus ring */
+select, input:not([type=checkbox]) { box-shadow: inset 0 1px 2px rgba(17,17,17,0.06); }
+select:focus, input:not([type=checkbox]):focus { border-color: var(--axis); box-shadow: 0 0 0 4px rgba(42,120,214,0.14); }
+.filters select { box-shadow: var(--highlight), 0 1px 2px rgba(17,17,17,0.06); border-color: rgba(17,17,17,0.08); }
+
+/* typography: crisper numbers */
+.kpi .val, .sg-card .big { letter-spacing: -0.035em; font-feature-settings: "tnum" on, "ss01" on; }
+.kpi .lab { color: var(--ink-2); }
+table { font-feature-settings: "tnum" on; }
+tr:hover td { background: rgba(127,127,127,0.04); }
